@@ -1,7 +1,6 @@
 package com.example.gmailapp;
 
 import android.accounts.Account;
-import android.app.Person;
 import android.content.Intent;
 import android.os.AsyncTask;
 import android.support.annotation.NonNull;
@@ -9,16 +8,14 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ListView;
 import android.widget.TextView;
 
 import com.google.android.gms.auth.api.Auth;
-import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
-import com.google.android.gms.auth.api.signin.GoogleSignInOptionsExtension;
 import com.google.android.gms.auth.api.signin.GoogleSignInResult;
 import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApi;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
@@ -28,37 +25,21 @@ import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecovera
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.client.util.Base64;
-import com.google.api.client.util.ExponentialBackOff;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.GmailScopes;
 import com.google.api.services.gmail.model.ListMessagesResponse;
 import com.google.api.services.gmail.model.Message;
+import com.google.api.services.gmail.model.MessagePart;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Properties;
-
-import javax.activation.DataHandler;
-import javax.activation.FileDataSource;
-import javax.mail.BodyPart;
-import javax.mail.MessagingException;
-import javax.mail.Multipart;
-import javax.mail.Session;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeBodyPart;
-import javax.mail.internet.MimeMessage;
-import javax.mail.internet.MimeMultipart;
-import javax.sql.DataSource;
 
 public class MainActivity extends AppCompatActivity implements GoogleApiClient.OnConnectionFailedListener {
     Button myButton;
     Button signOutButton;
     TextView myText;
-
+    ListView myList;
     private GoogleApiClient googleApiClient;
 
     private static final int REQ_CODE = 9001;
@@ -66,8 +47,6 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
 
     String[] SCOPES = { //cut this down
             GmailScopes.GMAIL_LABELS,
-            GmailScopes.GMAIL_COMPOSE,
-            GmailScopes.GMAIL_INSERT,
             GmailScopes.GMAIL_MODIFY,
             GmailScopes.GMAIL_READONLY,
             GmailScopes.MAIL_GOOGLE_COM
@@ -79,6 +58,7 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
         myButton = (Button) findViewById(R.id.button);
         signOutButton = (Button) findViewById(R.id.SignOut);
         myText = (TextView) findViewById(R.id.TextBoxThing);
+        myList = (ListView) findViewById(R.id.Emails);
 
         GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).requestEmail().build();
         googleApiClient = new GoogleApiClient.Builder(this).enableAutoManage(this, this).addApi(Auth.GOOGLE_SIGN_IN_API, signInOptions).build();
@@ -142,7 +122,6 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
 
 
     private class GetContactsTask extends AsyncTask<Void, Void, List<Message>> {
-
         Account mAccount;
         public GetContactsTask(Account account) {
             mAccount = account;
@@ -161,11 +140,28 @@ public class MainActivity extends AppCompatActivity implements GoogleApiClient.O
                 Gmail service = new Gmail.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
                         .setApplicationName("REST API sample")
                         .build();
+                //Do stuff
+
                 ListMessagesResponse response = service.users().messages().list("me").execute();
-                result.addAll(response.getMessages());
+                while (response.getMessages() != null) {
+                    result.addAll(response.getMessages());
+                    if (response.getNextPageToken() != null) {
+                        String pageToken = response.getNextPageToken();
+                        response = service.users().messages().list("me").setPageToken(pageToken).execute();
+                    } else {
+                        break;
+                    }
+                }
                 for (Message message : result) {
                     Message actualMessage = service.users().messages().get("me", message.getId()).execute();
-                    System.out.println(actualMessage.getSnippet());
+                    List<MessagePart> parts = actualMessage.getPayload().getParts();
+                    for (MessagePart part : parts) {
+                        if (part.getFilename() != null && part.getFilename().length() > 0) {
+                            String filename = part.getFilename();
+                            System.out.println(filename);
+                        }
+                    }
+
                 }
 
             } catch (UserRecoverableAuthIOException e) {
